@@ -35,6 +35,7 @@ type V1ArticleResponse struct {
 		ArticleTitle string `json:"article_title"`
 		// ColumnBgcolor      string `json:"column_bgcolor"`
 		// OfflinePackage     string `json:"offline_package"`
+		AiMindmap string `json:"ai_mindmap"`
 		// AudioTitle         string `json:"audio_title"`
 		// AudioTimeArr       struct {
 		// 	M string `json:"m"`
@@ -130,7 +131,7 @@ type V1ArticleResponse struct {
 		// HlsVideos        []interface{} `json:"hls_videos"`
 		// InPvip           int           `json:"in_pvip"`
 		AudioDownloadURL string `json:"audio_download_url"`
-		// ArticleCtime     int           `json:"article_ctime"`
+		ArticleCtime     int           `json:"article_ctime"`
 		// VideoHeight      int           `json:"video_height"`
 	} `json:"data"`
 	Code int `json:"code"`

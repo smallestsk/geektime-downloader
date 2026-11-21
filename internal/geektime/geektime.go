@@ -2,6 +2,8 @@ package geektime
 
 import (
 	"strconv"
+	"time"
+	"sort"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/nicoxiang/geektime-downloader/internal/geektime/response"
@@ -15,6 +17,8 @@ const (
 	V1ColumnArticlesPath = "/serv/v1/column/articles"
 	// V1ArticlePath used in normal column
 	V1ArticlePath = "/serv/v1/article"
+	// V4CommentsPath used in normal column
+	V4CommentsPath = "/serv/v4/comment/list"
 	// V3ColumnInfoPath used in get normal column/video info
 	V3ColumnInfoPath = "/serv/v3/column/info"
 	// V3ProductInfoPath used in get daily lesson, qconplus product info
@@ -41,6 +45,36 @@ type Course struct {
 	Type     string
 	IsVideo  bool
 	Articles []Article
+	TimeCreated time.Time
+	TimeUpdated time.Time
+	Unit string // 集数
+	Author struct {
+		Name string
+		Intro string
+		Brief string
+	}
+}
+
+
+// Product ...
+type Product struct {
+	Access   bool
+	ID       int
+	Title    string
+	Subtitle string
+	IntroHTML string
+	Type     string
+	IsVideo  bool
+	TimeCreated time.Time
+	TimeUpdated time.Time
+	Article struct {
+		ID int
+	}
+	Author struct {
+		Name string
+		Intro string
+		Info string
+	}
 }
 
 // Article ...
@@ -48,6 +82,24 @@ type Article struct {
 	AID          int
 	SectionTitle string
 	Title        string
+	Summary string
+}
+
+type ArticleComments struct {
+	Page struct {
+		HasMore bool
+		Count int
+	}
+	CommentList []struct {
+		UserName string
+		CommentCtime int
+		Replies []struct {
+			UserName string
+			Content string
+			CTime int
+		}
+		CommentContent string
+	}
 }
 
 // CourseInfo get narmal geektime course info
@@ -64,6 +116,11 @@ func (c *Client) CourseInfo(productID int) (Course, error) {
 	if err != nil {
 		return p, err
 	}
+
+	sort.Slice(articles, func(i, j int) bool {
+		return articles[i].AID < articles[j].AID
+	})
+
 	p.Articles = articles
 
 	return p, nil
@@ -91,8 +148,29 @@ func (c *Client) V1ArticleInfo(articleID int) (response.V1ArticleResponse, error
 	return res, nil
 }
 
+// V4CommentList ...
+func (c *Client) V4CommentList(articleID int, prev int) (ArticleComments, error) {
+	var res response.V4CommentListResponse
+	r := c.newRequest(
+		resty.MethodPost,
+		DefaultBaseURL,
+		V4CommentsPath,
+		nil,
+		map[string]interface{}{
+			"aid":  articleID,
+			"prev": prev,
+			"sort": 0,
+		},
+		&res,
+	)
+	if _, err := do(r); err != nil {
+		return ArticleComments{}, err
+	}
+	return ArticleComments(res.Data), nil
+}
+
 // ProductInfo used to get daily lesson or qconplus product info
-func (c *Client) ProductInfo(productID int) (response.V3ProductInfoResponse, error) {
+func (c *Client) ProductInfo(productID int) (Product, error) {
 	var res response.V3ProductInfoResponse
 	r := c.newRequest(
 		resty.MethodPost,
@@ -105,9 +183,22 @@ func (c *Client) ProductInfo(productID int) (response.V3ProductInfoResponse, err
 		&res,
 	)
 	if _, err := do(r); err != nil {
-		return response.V3ProductInfoResponse{}, err
+		return Product{}, err
 	}
-	return res, nil
+
+	return Product{
+		Access:  res.Data.Info.Extra.Sub.AccessMask > 0,
+		ID:      res.Data.Info.ID,
+		Title:   res.Data.Info.Title,
+		Subtitle: res.Data.Info.Subtitle,
+		IntroHTML: res.Data.Info.IntroHTML,
+		Type:    res.Data.Info.Type,
+		IsVideo: res.Data.Info.IsVideo,
+		TimeCreated: time.Unix(int64(res.Data.Info.Ctime), 0),
+		TimeUpdated: time.Unix(int64(res.Data.Info.Utime), 0),
+		Article: struct{ID int}{ID: res.Data.Info.Article.ID},
+		Author: struct{Name string; Intro string; Info string}(res.Data.Info.Author),
+	}, nil
 }
 
 // V3ArticleInfo used to get daily lesson or qconplus article info
@@ -174,6 +265,10 @@ func (c *Client) columnInfo(productID int) (Course, error) {
 		Type:    res.Data.Type,
 		Title:   res.Data.Title,
 		IsVideo: res.Data.IsVideo,
+		TimeCreated: time.Unix(int64(res.Data.Ctime), 0),
+		TimeUpdated: time.Unix(int64(res.Data.Utime), 0),
+		Unit: res.Data.Unit,
+		Author: struct{Name string; Intro string; Brief string}(res.Data.Author),
 	}, nil
 }
 
@@ -203,6 +298,7 @@ func (c *Client) columnArticles(cid int) ([]Article, error) {
 		articles = append(articles, Article{
 			AID:   v.ID,
 			Title: v.ArticleTitle,
+			Summary: v.ArticleSummary,
 		})
 	}
 	return articles, nil

@@ -48,6 +48,11 @@ type GetPlayInfoResponse struct {
 	PlayInfoList vod.PlayInfoListInGetPlayInfo `json:"PlayInfoList" xml:"PlayInfoList"`
 }
 
+func downloadFiles(ctx context.Context, url string, downloadDir string, filename string) {
+	filepath := filepath.Join(downloadDir, filenamify.Filenamify(filename))
+	downloader.DownloadFile(ctx, url, filepath);
+}
+
 // DownloadArticleVideo download normal video cource ...
 // sourceType: normal video cource 1
 func DownloadArticleVideo(ctx context.Context,
@@ -66,6 +71,17 @@ func DownloadArticleVideo(ctx context.Context,
 	if articleInfo.Data.Info.Video.ID == "" {
 		return nil
 	}
+
+	// 下载字幕文件
+	if articleInfo.Data.Info.Video.Subtitles != nil && len(articleInfo.Data.Info.Video.Subtitles) > 0 {
+		for _, subtitle := range articleInfo.Data.Info.Video.Subtitles {
+			subtitleFileName := filenamify.Filenamify(articleInfo.Data.Info.Title)+ "." + subtitle.Format
+			downloadFiles(ctx, subtitle.Url, projectDir, subtitleFileName)
+		}
+	} else {
+		logger.Warnf("视频文件无字幕, articleID: %d， articleTitle: %s", articleID, articleInfo.Data.Info.Title)
+	}
+
 	playAuth, err := client.VideoPlayAuth(articleInfo.Data.Info.ID, sourceType, articleInfo.Data.Info.Video.ID)
 	if err != nil {
 		return err
@@ -275,7 +291,7 @@ func mergeTSFiles(tempVideoDir, filenamifyTitle, projectDir string, key []byte, 
 		return err
 	}
 	fullPath := filepath.Join(projectDir, filenamifyTitle+TSExtension)
-	finalVideoFile, err := os.OpenFile(fullPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	finalVideoFile, err := os.OpenFile(fullPath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
 	if err != nil {
 		return err
 	}

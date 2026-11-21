@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 
@@ -40,7 +41,7 @@ func (ms *markdownString) ReplaceAll(o, n string) {
 }
 
 // Download article as markdown
-func Download(ctx context.Context, html, title, dir string, aid int) error {
+func Download(ctx context.Context, articleCreateTime time.Time, html string, title string, comments string, dir string, aid int, aiMindmap string, downImages bool) error {
 	logger.Infof("Begin download article markdown, articleID: %d, title: %s", aid, title)
 
 	select {
@@ -52,7 +53,7 @@ func Download(ctx context.Context, html, title, dir string, aid int) error {
 	markdwonFileName := path.Join(dir, filenamify.Filenamify(title)+MDExtension)
 
 	// step1: convert to md string
-	markdown, err := getDefaultConverter().ConvertString(html)
+	markdown, err := ConvertHtmlToMarkdown(html)
 	if err != nil {
 		logger.Errorf(err, "Failed to convert article html to markdown, articleID: %d, title: %s", aid, title)
 		return err
@@ -62,19 +63,21 @@ func Download(ctx context.Context, html, title, dir string, aid int) error {
 	imageURLs := findAllImages(markdown)
 
 	// images/aid/imageName.png
-	imagesFolder := filepath.Join(dir, "images", strconv.Itoa(aid))
+	if downImages {
+		imagesFolder := filepath.Join(dir, "images", strconv.Itoa(aid))
 
-	if _, err := os.Stat(imagesFolder); errors.Is(err, os.ErrNotExist) {
-		err = os.MkdirAll(imagesFolder, os.ModePerm)
+		if _, err := os.Stat(imagesFolder); errors.Is(err, os.ErrNotExist) {
+			err = os.MkdirAll(imagesFolder, os.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = writeImageFile(ctx, imageURLs, dir, imagesFolder, ss)
 		if err != nil {
+			logger.Errorf(err, "Failed to download article images, articleID: %d, title: %s, imagesURLs: %v", aid, title, imageURLs)
 			return err
 		}
-	}
-
-	err = writeImageFile(ctx, imageURLs, dir, imagesFolder, ss)
-	if err != nil {
-		logger.Errorf(err, "Failed to download article images, articleID: %d, title: %s, imagesURLs: %v", aid, title, imageURLs)
-		return err
 	}
 
 	f, err := os.Create(markdwonFileName)
@@ -84,13 +87,30 @@ func Download(ctx context.Context, html, title, dir string, aid int) error {
 	if err != nil {
 		return err
 	}
+
+	frontMatter := "---\ndate created: " + articleCreateTime.Format("2006-01-02 15:04") + "\n---\n\n"
+
+	mindmapStr := ""
+	if aiMindmap != "" {
+		mindmapStr = "# ai mindmap\n```\n" + aiMindmap + "\n```\n\n"
+	}
+
 	// step3: write md file
-	_, err = f.WriteString("# " + title + "\n" + ss.s)
+	_, err = f.WriteString(frontMatter + mindmapStr + "# " + title + "\n" + ss.s + comments)
 	if err != nil {
 		return err
 	}
 	logger.Infof("Finish download article markdown, articleID: %d, title: %s", aid, title)
 	return nil
+}
+
+func ConvertHtmlToMarkdown(html string) (string, error) {
+	markdown, err := getDefaultConverter().ConvertString(html)
+	if err != nil {
+		logger.Errorf(err, "Failed to convert html to markdown")
+		return "", err
+	}
+	return markdown, nil
 }
 
 func findAllImages(md string) (images []string) {

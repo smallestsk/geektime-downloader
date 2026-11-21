@@ -11,6 +11,26 @@ type ProductTypeSelectOption struct {
 	AcceptProductTypes []string
 	NeedSelectArticle  bool
 	IsEnterpriseMode   bool
+	IsUniversityMode   bool
+}
+
+var enterpriseProductTypeOptions = []ProductTypeSelectOption{
+	{0, "训练营", 5, []string{"c44"}, true, true, false}, //custom source type, not use
+}
+var normalProductTypeOptions = []ProductTypeSelectOption{
+	{0, "普通课程", 1, []string{"c1", "c3"}, true, false, false},
+	{1, "每日一课", 2, []string{"d"}, false, false, false},
+	{2, "公开课", 1, []string{"p35", "p29", "p30"}, true, false, false},
+	{3, "大厂案例", 4, []string{"q"}, false, false, false},
+	{4, "训练营", 5, []string{""}, true, false, true}, //custom source type, not use
+	{5, "其他", 1, []string{"x", "c6"}, true, false, false},
+}
+
+func GetProductTypeSelectOptionByIndex(index int, isEnterprise bool) ProductTypeSelectOption {
+	if isEnterprise {
+		return enterpriseProductTypeOptions[index]
+	}
+	return normalProductTypeOptions[index]
 }
 
 func ProductTypeSelect(isEnterprise bool) (ProductTypeSelectOption, error) {
@@ -18,14 +38,9 @@ func ProductTypeSelect(isEnterprise bool) (ProductTypeSelectOption, error) {
 	productTypeOptions := []ProductTypeSelectOption{}
 
 	if isEnterprise {
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{0, "训练营", 5, []string{"c44"}, true, true}) //custom source type, not use
+		productTypeOptions = enterpriseProductTypeOptions
 	} else {
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{0, "普通课程", 1, []string{"c1", "c3"}, true, false})
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{1, "每日一课", 2, []string{"d"}, false, false})
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{2, "公开课", 1, []string{"p35", "p29", "p30"}, true, false})
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{3, "大厂案例", 4, []string{"q"}, false, false})
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{4, "训练营", 5, []string{""}, true, false}) //custom source type, not use
-		productTypeOptions = append(productTypeOptions, ProductTypeSelectOption{5, "其他", 1, []string{"x", "c6"}, true, false})
+		productTypeOptions = normalProductTypeOptions
 	}
 
 	templates := &promptui.SelectTemplates{
@@ -50,5 +65,5 @@ func ProductTypeSelect(isEnterprise bool) (ProductTypeSelectOption, error) {
 
 // IsUniversity checks if the product type is university product type
 func (p *ProductTypeSelectOption) IsUniversity() bool {
-	return p.Index == 4 && !p.IsEnterpriseMode
+	return p.IsUniversityMode
 }

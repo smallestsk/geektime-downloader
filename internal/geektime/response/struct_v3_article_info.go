@@ -51,7 +51,11 @@ type V3ArticleInfoResponse struct {
 				// 	Quality string `json:"quality"`
 				// 	URL     string `json:"url"`
 				// } `json:"hls_medias"`
-				// Subtitles []interface{} `json:"subtitles"`
+				Subtitles []struct {
+					Url    string `json:"url"`
+					Format    string `json:"format"`
+					Name    string `json:"name"`
+				} `json:"subtitles"`
 				// Tips      []interface{} `json:"tips"`
 			} `json:"video"`
 			// VideoPreview struct {
@@ -112,7 +116,10 @@ type V3ArticleInfoResponse struct {
 			// IPAddress   string        `json:"ip_address"`
 			// Content     string        `json:"content"`
 			// ContentMd   string        `json:"content_md"`
-			// Attachments []interface{} `json:"attachments"`
+			Attachments []struct{
+					Url    string `json:"url"`
+					Filename    string `json:"filename"`
+			} `json:"attachments"`
 		} `json:"info"`
 		Product struct {
 			// ID         int    `json:"id"`

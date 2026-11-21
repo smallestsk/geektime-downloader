@@ -23,6 +23,66 @@ type Part struct {
 	Offset int64
 }
 
+// func ResolveURL(baseURL, relPath string) (string, error) {
+// 	base, err := url.Parse(baseURL)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	// 确保 base 以 / 结尾，表示“目录”，否则相对路径会替换掉最后一段
+// 	if !strings.HasSuffix(base.Path, "/") {
+// 		base.Path += "/"
+// 	}
+
+// 	rel, err := url.Parse(relPath)
+// 	if err != nil {
+// 		return "", err
+// 	}
+
+// 	return base.ResolveReference(rel).String(), nil
+// }
+
+func DownloadFile(ctx context.Context, url string, filepath string) (int64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	// 先写临时文件，成功后再 rename，避免留下半截文件
+	tmp := filepath + ".part"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return 0, err
+	}
+
+	n, copyErr := io.Copy(out, resp.Body)
+	closeErr := out.Close()
+
+	if copyErr != nil {
+		os.Remove(tmp)
+		return n, copyErr
+	}
+	if closeErr != nil {
+		os.Remove(tmp)
+		return n, closeErr
+	}
+
+	if err := os.Rename(tmp, filepath); err != nil {
+		os.Remove(tmp)
+		return n, err
+	}
+	return n, nil
+}
+
 // DownloadFileConcurrently download file in chunks, return total file size
 func DownloadFileConcurrently(ctx context.Context, filepath string, url string, headers map[string]string, concurrency int) (int64, error) {
 	// Use HEAD with context so it can be cancelled by parent ctx (Ctrl+C)

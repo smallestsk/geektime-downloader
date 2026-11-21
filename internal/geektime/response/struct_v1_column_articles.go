@@ -53,7 +53,7 @@ type V1ColumnArticlesResponse struct {
 			ArticleTitle     string `json:"article_title"`
 			// ColumnBgcolor    string `json:"column_bgcolor,omitempty"`
 			// IsVideoPreview   bool   `json:"is_video_preview"`
-			// ArticleSummary   string `json:"article_summary"`
+			ArticleSummary   string `json:"article_summary"`
 			// ColumnID         int    `json:"column_id,omitempty"`
 			// AudioTitle       string `json:"audio_title,omitempty"`
 			// AudioMd5         string `json:"audio_md5,omitempty"`

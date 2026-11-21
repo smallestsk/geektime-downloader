@@ -7,8 +7,8 @@ type V3ProductInfoResponse struct {
 		Info struct {
 			ID        int `json:"id"`
 			// Spu       int `json:"spu"`
-			// Ctime     int `json:"ctime"`
-			// Utime     int `json:"utime"`
+			Ctime     int `json:"ctime"`
+			Utime     int `json:"utime"`
 			// BeginTime int `json:"begin_time"`
 			// EndTime   int `json:"end_time"`
 			// Price     struct {
@@ -36,19 +36,19 @@ type V3ProductInfoResponse struct {
 			// NavID         int    `json:"nav_id"`
 			// TimeNotSale   int    `json:"time_not_sale"`
 			Title         string `json:"title"`
-			// Subtitle      string `json:"subtitle"`
+			Subtitle      string `json:"subtitle"`
 			// Intro         string `json:"intro"`
-			// IntroHTML     string `json:"intro_html"`
+			IntroHTML     string `json:"intro_html"`
 			// Ucode         string `json:"ucode"`
 			// IsFinish      bool   `json:"is_finish"`
-			// Author        struct {
-			// 	Name      string `json:"name"`
-			// 	Intro     string `json:"intro"`
-			// 	Info      string `json:"info"`
+			Author        struct {
+				Name      string `json:"name"`
+				Intro     string `json:"intro"`
+				Info      string `json:"info"`
 			// 	Avatar    string `json:"avatar"`
 			// 	BriefHTML string `json:"brief_html"`
 			// 	Brief     string `json:"brief"`
-			// } `json:"author"`
+			} `json:"author"`
 			// Cover struct {
 			// 	Square            string `json:"square"`
 			// 	Rectangle         string `json:"rectangle"`

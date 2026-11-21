@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"strings"
+	"strconv"
 
 	"github.com/briandowns/spinner"
 	"github.com/manifoldco/promptui"
@@ -41,8 +43,89 @@ func NewFSMRunner(ctx context.Context, cfg *config.AppConfig, geektimeClient *ge
 	}
 }
 
-// Run executes the finite state machine loop, handling user input and state transitions.
 func (r *FSMRunner) Run() error {
+	if r.config.Quiet {
+		return r.runQuietMode()
+	}
+	return r.runInteractiveMode()
+}
+
+// 使用 productType 和 productIDs 下载
+// 如果指定了 articleIDs，则下载指定的文章，否则下载所有文章
+func (r *FSMRunner) runQuietMode() error {
+	productIDs := strings.Split(r.config.ProductID, ",")
+	var articleIDs []string = []string{}
+	if r.config.ArticleID != "" {
+		articleIDs = strings.Split(r.config.ArticleID, ",")
+	}
+
+	productType := r.config.ProductType
+	var failedProductIDs []string = []string{}
+
+	for _, productID := range productIDs {
+		err := r.download(productType, productID, articleIDs)
+		if err != nil {
+			logger.Errorf(err, "download failed, productType: %d, productID: %s", productType, productID)
+			failedProductIDs = append(failedProductIDs, productID)
+		}
+	}
+
+	if len(failedProductIDs) > 0 {
+		fmt.Fprint(os.Stderr, "下载失败的 productID: %s\n", strings.Join(failedProductIDs, ","))
+	}
+	return nil
+}
+
+func (r *FSMRunner) download(productType int, productID string, articleIDs []string) error {
+	productTypeOption := ui.GetProductTypeSelectOptionByIndex(productType, r.config.IsEnterprise)
+	productIDInt, err := strconv.Atoi(productID)
+	if err != nil {
+		return fmt.Errorf("invalid product ID: %s", productID)
+	}
+
+	if !productTypeOption.NeedSelectArticle {
+		return  r.handleInputProductIDIfDownloadDirectly(productIDInt)
+	} else {
+		// queryCourseInfo by productID
+		//     articleIDs 为空，则 r.courseDownloader.DownloadAll(courseInfo, productTypeOption)
+		//     如果不为空，则 r.courseDownloader.DownloadArticle(r.selectedProduct, r.selectedProductType, a, true, false); // a 从 courseInfo.Articles 中取
+
+		course, err := r.queryCourseInfo(productIDInt, productTypeOption)
+		if err != nil {
+			return err
+		}
+
+		if len(articleIDs) == 0 {
+			return r.courseDownloader.DownloadAll(course, productTypeOption)
+		} else {
+			articleMap := make(map[int]geektime.Article, len(articleIDs))
+			for _, article := range course.Articles {
+				articleMap[article.AID] = article
+			}
+
+			for _, articleID := range articleIDs {
+				articleIDInt, err := strconv.Atoi(articleID)
+				if err != nil {
+					return fmt.Errorf("invalid article ID: %s", articleID)
+				}
+				article, exists := articleMap[articleIDInt]
+				if !exists {
+					logger.Errorf(nil, "productID: %d, articleID: %d not found in course.Articles", productIDInt, articleIDInt)
+					continue
+				}
+				err = r.downloadArticle(productTypeOption, course, article)
+				if err != nil {
+					return fmt.Errorf("downloadArticle failed, productID: %d, articleID: %d", productIDInt, articleIDInt)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// Run executes the finite state machine loop, handling user input and state transitions.
+func (r *FSMRunner) runInteractiveMode() error {
 	for {
 		var err error
 		switch r.currentState {
@@ -105,7 +188,7 @@ func (r *FSMRunner) Run() error {
 	}
 }
 
-func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error {
+func (r *FSMRunner) queryCourseInfo(productID int, productTypeOption ui.ProductTypeSelectOption) (geektime.Course, error) {
 	// choose download all or download specified article
 	r.sp.Prefix = "[ 正在加载课程信息... ]"
 	r.sp.Start()
@@ -117,7 +200,7 @@ func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error
 		// TODO: check enterprise course type
 		course, err = r.geektimeClient.EnterpriseCourseInfo(productID)
 		if err != nil {
-			return err
+			return geektime.Course{}, err
 		}
 
 	} else {
@@ -126,24 +209,77 @@ func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error
 			// if input invalid id, access mark is 0
 			course, err = r.geektimeClient.UniversityClassInfo(productID)
 			if err != nil {
-				return err
+				return geektime.Course{}, err
 			}
 		} else {
 			course, err = r.geektimeClient.CourseInfo(productID)
 			if err == nil {
-				valid := r.validateProductCode(course.Type)
+				valid := r.validateProductCode(course.Type, productTypeOption)
 				// if check product type fail, re-input product
 				if !valid {
-					r.currentState = StateInputProductID
-					return nil
+					err := fmt.Errorf("(queryCourseInfo) not valid course, productID: %d, courseType: %s", productID, course.Type)
+					return geektime.Course{}, err
 				}
 			} else {
-				return err
+				return geektime.Course{}, err
 			}
 		}
 	}
 	if !course.Access {
 		fmt.Fprint(os.Stderr, "尚未购买该课程\n")
+		return geektime.Course{}, fmt.Errorf("(queryCourseInfo) course not accessible, productID: %d, courseType: %s", productID, course.Type)
+	}
+
+	return course, nil
+}
+
+// queryCourseInfo
+func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error {
+	// // choose download all or download specified article
+	// r.sp.Prefix = "[ 正在加载课程信息... ]"
+	// r.sp.Start()
+	// defer r.sp.Stop()
+
+	// var course geektime.Course
+	// var err error
+	// if r.selectedProductType.IsEnterpriseMode {
+	// 	// TODO: check enterprise course type
+	// 	course, err = r.geektimeClient.EnterpriseCourseInfo(productID)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// } else {
+	// 	if r.selectedProductType.IsUniversity() {
+	// 		// university don't need check product type
+	// 		// if input invalid id, access mark is 0
+	// 		course, err = r.geektimeClient.UniversityClassInfo(productID)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	} else {
+	// 		course, err = r.geektimeClient.CourseInfo(productID)
+	// 		if err == nil {
+	// 			valid := r.validateProductCode(course.Type)
+	// 			// if check product type fail, re-input product
+	// 			if !valid {
+	// 				r.currentState = StateInputProductID
+	// 				return nil
+	// 			}
+	// 		} else {
+	// 			return err
+	// 		}
+	// 	}
+	// }
+	// if !course.Access {
+	// 	fmt.Fprint(os.Stderr, "尚未购买该课程\n")
+	// 	r.currentState = StateInputProductID
+	// 	return nil
+	// }
+
+	course, err := r.queryCourseInfo(productID, r.selectedProductType)
+	if err != nil {
+		logger.Errorf(err, "handleInputProductIDIfNeedSelectArticle error, productID: %d", productID)
 		r.currentState = StateInputProductID
 		return nil
 	}
@@ -161,15 +297,14 @@ func (r *FSMRunner) handleInputProductIDIfDownloadDirectly(productID int) error 
 		return err
 	}
 
-	if productInfo.Data.Info.Extra.Sub.AccessMask == 0 {
-		fmt.Fprint(os.Stderr, "尚未购买该课程\n")
+	if productInfo.Access == false {
+		fmt.Fprint(os.Stderr, "尚未购买该课程, productID: %d\n", productID)
 		r.currentState = StateInputProductID
 		return nil
 	}
 
-	if r.validateProductCode(productInfo.Data.Info.Type) {
-		err = r.courseDownloader.DownloadSingleVideoProduct(productInfo.Data.Info.Title,
-			productInfo.Data.Info.Article.ID,
+	if r.validateProductCode(productInfo.Type, r.selectedProductType) {
+		err = r.courseDownloader.DownloadSingleVideoProduct(productInfo,
 			r.selectedProductType.SourceType)
 		if err != nil {
 			return err
@@ -181,14 +316,39 @@ func (r *FSMRunner) handleInputProductIDIfDownloadDirectly(productID int) error 
 
 // validateProductCode checks if the product code field in the response body returned by the API
 // exists in the selected product's accepted product types list.
-func (r *FSMRunner) validateProductCode(productCode string) bool {
-	for _, pt := range r.selectedProductType.AcceptProductTypes {
+func (r *FSMRunner) validateProductCode(productCode string, productTypeOption ui.ProductTypeSelectOption) bool {
+	for _, pt := range productTypeOption.AcceptProductTypes {
 		if pt == productCode {
 			return true
 		}
 	}
 	fmt.Fprint(os.Stderr, "\r输入的课程 ID 有误\n")
 	return false
+}
+
+func (r *FSMRunner) downloadArticle(productTypeOption ui.ProductTypeSelectOption, course geektime.Course, article geektime.Article) error {
+	// 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
+	// 选择文章下载时，如果是文本类，提示用户重新选择
+	if productTypeOption.IsUniversity() {
+		universityArticleDetail, err := r.geektimeClient.UniversityClassArticleDetail(course.ID, article.AID)
+		if err != nil {
+			return err
+		}
+		if universityArticleDetail.Data.VideoID == "" {
+			fmt.Printf("\r训练营暂时只支持下载视频")
+			time.Sleep(time.Second)
+			return fmt.Errorf("训练营暂时只支持下载视频，该文章是文本类，articleID: %d", article.AID)
+		}
+	}
+
+	err := r.courseDownloader.DownloadArticle(course, productTypeOption, article, true, false)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\r%s 下载完成", article.Title)
+	time.Sleep(time.Second)
+
+	return nil
 }
 
 func (r *FSMRunner) handleSelectArticle(index int, selectedProductType ui.ProductTypeSelectOption, selectedProduct geektime.Course) error {
@@ -198,27 +358,31 @@ func (r *FSMRunner) handleSelectArticle(index int, selectedProductType ui.Produc
 	}
 	a := r.selectedProduct.Articles[index-1]
 
-	// 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
-	// 选择文章下载时，如果是文本类，提示用户重新选择
-	if selectedProductType.IsUniversity() {
-		universityArticleDetail, err := r.geektimeClient.UniversityClassArticleDetail(selectedProduct.ID, a.AID)
-		if err != nil {
-			return err
-		}
-		if universityArticleDetail.Data.VideoID == "" {
-			fmt.Printf("\r训练营暂时只支持下载视频，请重新选择")
-			time.Sleep(time.Second)
-			r.currentState = StateSelectArticle
-			return nil
-		}
-	}
+	// // 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
+	// // 选择文章下载时，如果是文本类，提示用户重新选择
+	// if selectedProductType.IsUniversity() {
+	// 	universityArticleDetail, err := r.geektimeClient.UniversityClassArticleDetail(selectedProduct.ID, a.AID)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if universityArticleDetail.Data.VideoID == "" {
+	// 		fmt.Printf("\r训练营暂时只支持下载视频，请重新选择")
+	// 		time.Sleep(time.Second)
+	// 		r.currentState = StateSelectArticle
+	// 		return nil
+	// 	}
+	// }
 
-	err := r.courseDownloader.DownloadArticle(r.selectedProduct, r.selectedProductType, a, true)
+	// err := r.courseDownloader.DownloadArticle(r.selectedProduct, r.selectedProductType, a, true, false)
+	// if err != nil {
+	// 	return err
+	// }
+	// fmt.Printf("\r%s 下载完成", a.Title)
+	// time.Sleep(time.Second)
+	err := r.downloadArticle(selectedProductType, selectedProduct, a)
 	if err != nil {
-		return err
+		logger.Errorf(err, "handleSelectArticle error, productID: %d, articleID: %d", selectedProduct.ID, a.AID)
 	}
-	fmt.Printf("\r%s 下载完成", a.Title)
-	time.Sleep(time.Second)
 	r.currentState = StateSelectArticle
 	return nil
 }

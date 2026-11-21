@@ -17,14 +17,16 @@ type AppConfig struct {
 	Gcess                  string
 	DownloadFolder         string
 	Quality                string
-	DownloadComments       int
-	ColumnOutputType       int
-	PrintPDFWaitSeconds    int
-	PrintPDFTimeoutSeconds int
 	Interval               int
 	IsEnterprise           bool
 	SkipEmbedVideo         bool
 	LogLevel               string
+	DownloadImages         bool
+	ProductType            int
+	ProductID              string
+	ArticleID              string
+	Quiet                  bool
+	MaxCommentsPage        int
 }
 
 func ReadCookiesFromInput(cfg *AppConfig) []*http.Cookie {

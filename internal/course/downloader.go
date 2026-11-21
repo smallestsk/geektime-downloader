@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"path"
 	"runtime"
 	"strings"
 	"time"
@@ -14,11 +15,10 @@ import (
 	"github.com/briandowns/spinner"
 	"golang.org/x/net/html"
 
-	"github.com/nicoxiang/geektime-downloader/internal/audio"
+	"github.com/nicoxiang/geektime-downloader/internal/comments"
 	"github.com/nicoxiang/geektime-downloader/internal/config"
 	"github.com/nicoxiang/geektime-downloader/internal/geektime"
 	"github.com/nicoxiang/geektime-downloader/internal/markdown"
-	"github.com/nicoxiang/geektime-downloader/internal/pdf"
 	"github.com/nicoxiang/geektime-downloader/internal/pkg/filenamify"
 	"github.com/nicoxiang/geektime-downloader/internal/pkg/files"
 	"github.com/nicoxiang/geektime-downloader/internal/pkg/logger"
@@ -27,9 +27,6 @@ import (
 )
 
 const (
-	outputPDF   = 1 << 0 // 1
-	outputMD    = 1 << 1 // 2
-	outputAudio = 1 << 2 // 4
 )
 
 type CourseDownloader struct {
@@ -56,11 +53,200 @@ func NewCourseDownloader(ctx context.Context, cfg *config.AppConfig, geektimeCli
 	}
 }
 
+func saveProductInfoFile(course geektime.Product, dir string, comments string) error {
+	courseInfoFileName := path.Join(dir, filenamify.Filenamify("00-geektime课程简介") + ".md")
+	if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
+		return nil
+	}
+
+	// ---
+	// date created: time.Now()
+	// course title: $course.title
+	// author: $course.Author.Name
+	// course created date: $course.TimeCreated.Format("2020/01/30 13:00:00")
+	// course updated date: $course.TimeUpdated.Format("2020/01/30 13:00:00")
+	// ---
+	//
+	frontMatter := fmt.Sprintf("---\n" +
+							"date created: %s\n" +
+							"course title: %s\n" +
+							"author: %s\n" +
+							"course created date: %s\n" +
+							"course updated date: %s\n" +
+							"---\n\n",
+						time.Now().Format("2006-01-02 15:04"),
+						course.Title,
+						course.Author.Name,
+						course.TimeCreated.Format("2006-01-02 15:04"),
+						course.TimeUpdated.Format("2006-01-02 15:04"),
+					)
+
+	// # Course info
+	// Title: $course.Title
+	// Title: $course.Subtitle
+	// course created date: $course.TimeCreated.Format("2020/01/30 13:00:00")
+	// course updated date: $course.TimeUpdated.Format("2020/01/30 13:00:00")
+	//
+	courseInfo := fmt.Sprintf("\n\n# Course info\n" +
+							"course id: %d\n" +
+							"Title: %s\n" +
+							"Subtitle: %s\n" +
+							"course created date: %s\n" +
+							"course updated date: %s\n\n",
+						course.ID,
+						course.Title,
+						course.Subtitle,
+						course.TimeCreated.Format("2006-01-02 15:04"),
+						course.TimeUpdated.Format("2006-01-02 15:04"),
+					)
+
+	// # Author info
+	// author name: $course.Author.Name
+	// author introduction: $course.Author.Intro
+	// author brief:
+	// ```
+	// $course.Author.Brief
+	// ```
+	//
+	authorInfo := fmt.Sprintf("# Author info\n" +
+							"author name: %s\n" +
+							"author introduction: %s\n" +
+							"author info: \n" +
+							"```\n" +
+							"%s\n" +
+							"```\n",
+						course.Author.Name,
+						html.UnescapeString(course.Author.Intro),
+						html.UnescapeString(course.Author.Info),
+					)
+	
+	productIntro, err := markdown.ConvertHtmlToMarkdown(course.IntroHTML)
+	if err != nil {
+		return err
+	}
+
+	// // 保存 course info 到文件
+	f, err := os.Create(courseInfoFileName)
+	defer func() {
+		_ = f.Close()
+	}()
+	if err != nil {
+		return err
+	}
+	// step3: write comments file
+	_, err = f.WriteString(frontMatter + productIntro + courseInfo + authorInfo + comments)
+	if err != nil {
+		return err
+	}
+	logger.Infof("Finish download product info file, aid:%s, title: %s", course.ID, course.Title)
+	return nil
+}
+
+func saveCourseInfoFile(course geektime.Course, dir string) error {
+	courseInfoFileName := path.Join(dir, filenamify.Filenamify("00-geektime课程简介") + ".md")
+	if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
+		return nil
+	}
+
+	// ---
+	// date created: time.Now()
+	// course created date: $course.TimeCreated.Format("2020/01/30 13:00:00")
+	// course updated date: $course.TimeUpdated.Format("2020/01/30 13:00:00")
+	// author: $course.Author.Name
+	// ---
+	//
+	frontMatter := fmt.Sprintf("---\n" +
+							"date created: %s\n" +
+							"course created date: %s\n" +
+							"course updated date: %s\n" +
+							"author: %s\n" +
+							"\n---\n\n",
+						time.Now().Format("2006-01-02 15:04"),
+						course.TimeCreated.Format("2006-01-02 15:04"),
+						course.TimeUpdated.Format("2006-01-02 15:04"),
+						course.Author.Name,
+					)
+
+	// # Course info
+	// Title: $course.Title
+	// course created date: $course.TimeCreated.Format("2020/01/30 13:00:00")
+	// course updated date: $course.TimeUpdated.Format("2020/01/30 13:00:00")
+	// course unit count: $course.Unit
+	//
+	courseInfo := fmt.Sprintf("# Course info\n" +
+							"course id: %d\n" +
+							"Title: %s\n" +
+							"course created date: %s\n" +
+							"course updated date: %s\n" +
+							"course unit count: %s\n\n",
+						course.ID,
+						course.Title,
+						course.TimeCreated.Format("2006-01-02 15:04"),
+						course.TimeUpdated.Format("2006-01-02 15:04"),
+						course.Unit,
+					)
+
+	// # Author info
+	// author name: $course.Author.Name
+	// author introduction: $course.Author.Intro
+	// author brief:
+	// ```
+	// $course.Author.Brief
+	// ```
+	//
+	authorInfo := fmt.Sprintf("# Author info\n" +
+							"author name: %s\n" +
+							"author introduction: %s\n" +
+							"author brief: \n" +
+							"```\n" +
+							"%s\n" +
+							"```\n\n",
+						course.Author.Name,
+						html.UnescapeString(course.Author.Intro),
+						html.UnescapeString(course.Author.Brief),
+					)
+
+	// # Article list
+	// | article | summary |
+	// | -- | -- |
+	// | [[$listItem.Title]] | $listItem.Summary |
+	var b strings.Builder
+	for _, article := range course.Articles {
+		b.WriteString(fmt.Sprintf("| [[%s]] | %s |\n",
+						filenamify.Filenamify(article.Title), article.Summary))
+	}
+	articleTable := "# Article list\n" +
+					"| article | summary |\n" +
+					"| --- | --- |\n" +
+					b.String()
+
+	// // 保存 course info 到文件
+	f, err := os.Create(courseInfoFileName)
+	defer func() {
+		_ = f.Close()
+	}()
+	if err != nil {
+		return err
+	}
+	// step3: write comments file
+	_, err = f.WriteString(frontMatter + courseInfo + authorInfo + articleTable)
+	if err != nil {
+		return err
+	}
+	logger.Infof("Finish download course info file, aid:%s, title: %s", course.ID, course.Title)
+	return nil
+}
+
 // DownloadAll manages the bulk download process for all articles in a selected product (course).
 // Returns an error if any step in the download process fails.
 func (d *CourseDownloader) DownloadAll(course geektime.Course, productType ui.ProductTypeSelectOption) error {
 	columnDir, err := d.mkDownloadColumnDir(course.Title)
 	if err != nil {
+		return err
+	}
+
+	if err := saveCourseInfoFile(course, columnDir); err != nil {
+		fmt.Printf("课程信息下载失败， aid: %d, title: %s\n", course.ID, course.Title)
 		return err
 	}
 
@@ -70,76 +256,89 @@ func (d *CourseDownloader) DownloadAll(course geektime.Course, productType ui.Pr
 		var downloaded int
 
 		for _, article := range course.Articles {
-			skip := d.skipDownloadTextArticle(article, columnDir, false)
-			if !skip {
-				logger.Infof("Begin download article, articleID: %d, articleTitle: %s", article.AID, article.Title)
-				if err := d.downloadTextArticle(article, columnDir, false); err != nil {
-					return err
-				}
-				d.waitRandomTime()
-			}
+			d.DownloadArticle(course, productType, article, false, true)
 			increaseDownloadedTextArticleCount(total, &downloaded)
 		}
 	} else {
 		for _, article := range course.Articles {
-			skip := d.skipDownloadVideoArticle(article, columnDir, false)
-			// 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
-			// 下载所有时如果是文本类，直接跳过
-			if productType.IsUniversity() {
-				universityArticleDetail, err := d.geektimeClient.UniversityClassArticleDetail(course.ID, article.AID)
-				if err != nil {
-					return err
-				}
-				if universityArticleDetail.Data.VideoID == "" {
-					skip = true
-				}
-			}
-			if !skip {
-				if err := d.downloadVideoArticle(course, productType, article, columnDir); err != nil {
-					return err
-				}
-				d.waitRandomTime()
-			}
+			d.DownloadArticle(course, productType, article, false, true)
 		}
 	}
 
+	fmt.Printf("\n")
 	return nil
 }
 
 // DownloadArticle processes the download of a single article from Geektime.
 // It handles both text-based courses and video content differently.
-func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType ui.ProductTypeSelectOption, article geektime.Article, overwrite bool) error {
+func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType ui.ProductTypeSelectOption, article geektime.Article, overwrite bool, waitRandomTime bool) error {
 	columnDir, err := d.mkDownloadColumnDir(course.Title)
 	if err != nil {
 		return err
 	}
 
 	if geektime.IsTextCourse(course) {
-		d.downloadingSpinner.Prefix = fmt.Sprintf("[ 正在下载 《%s》... ]", article.Title)
-		d.downloadingSpinner.Start()
-		defer d.downloadingSpinner.Stop()
 		skip := d.skipDownloadTextArticle(article, columnDir, overwrite)
 		if skip {
 			return nil
 		}
+		if waitRandomTime {
+			d.waitRandomTime()
+		}
+
+		d.downloadingSpinner.Prefix = fmt.Sprintf("[ 正在下载 《%s》, articleID: %d... ]", article.Title, article.AID)
+		d.downloadingSpinner.Start()
+		defer d.downloadingSpinner.Stop()
 		return d.downloadTextArticle(article, columnDir, overwrite)
 	} else {
 		skip := d.skipDownloadVideoArticle(article, columnDir, overwrite)
+
+		// 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
+		// 下载所有时如果是文本类，直接跳过
+		if productType.IsUniversity() {
+			universityArticleDetail, err := d.geektimeClient.UniversityClassArticleDetail(course.ID, article.AID)
+			if err != nil {
+				return err
+			}
+			if universityArticleDetail.Data.VideoID == "" {
+				skip = true
+			}
+		}
 		if skip {
 			return nil
 		}
+		if waitRandomTime {
+			d.waitRandomTime()
+		}
+
 		return d.downloadVideoArticle(course, productType, article, columnDir)
 	}
 }
 
 // DownloadSingleVideoProduct downloads a single video product.
 // 每日一课，大厂案例等
-func (d *CourseDownloader) DownloadSingleVideoProduct(title string, articleID int, sourceType int) error {
-	columnDir, err := d.mkDownloadColumnDir(title)
+// 大厂案例课是 Product 类型，然后 Product 下挂 Article， Article 内有一个 video。
+// comments 也是跟 Article 绑定的（用 articleID 获取评论列表）
+func (d *CourseDownloader) DownloadSingleVideoProduct(productInfo geektime.Product, sourceType int) error {
+	columnDir, err := d.mkDownloadColumnDir(productInfo.Title)
 	if err != nil {
 		return err
 	}
-	return video.DownloadArticleVideo(d.ctx, d.geektimeClient, articleID, sourceType, columnDir, d.cfg.Quality, d.concurrency)
+
+	commentList, err := d.fetchComments(d.ctx,
+		productInfo.Article.ID,
+		d.cfg.MaxCommentsPage,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := saveProductInfoFile(productInfo, columnDir, comments.ConvertToMarkdown(commentList)); err != nil {
+		fmt.Printf("课程信息下载失败， aid: %d, title: %s\n", productInfo.ID, productInfo.Title)
+		return err
+	}
+
+	return video.DownloadArticleVideo(d.ctx, d.geektimeClient, productInfo.Article.ID, sourceType, columnDir, d.cfg.Quality, d.concurrency)
 }
 
 func increaseDownloadedTextArticleCount(total int, downloaded *int) {
@@ -156,38 +355,48 @@ func (d *CourseDownloader) skipDownloadTextArticle(article geektime.Article, col
 		return false
 	}
 
-	needDownloadPDF := d.cfg.ColumnOutputType&outputPDF != 0
-	needDownloadMD := d.cfg.ColumnOutputType&outputMD != 0
-	needDownloadAudio := d.cfg.ColumnOutputType&outputAudio != 0
-
-	if needDownloadPDF {
-		pdfFileName := filepath.Join(columnDir, filenamify.Filenamify(article.Title)+pdf.PDFExtension)
-		if !files.CheckFileExists(pdfFileName) {
-			return false
-		}
-	}
-	if needDownloadMD {
-		markdownFileName := filepath.Join(columnDir, filenamify.Filenamify(article.Title)+markdown.MDExtension)
-		if !files.CheckFileExists(markdownFileName) {
-			return false
-		}
-	}
-	if needDownloadAudio {
-		audioFileName := filepath.Join(columnDir, filenamify.Filenamify(article.Title)+audio.MP3Extension)
-		if !files.CheckFileExists(audioFileName) {
-			return false
-		}
+	markdownFileName := filepath.Join(columnDir, filenamify.Filenamify(article.Title)+markdown.MDExtension)
+	if !files.CheckFileExists(markdownFileName) {
+		return false
 	}
 
 	return true
 }
 
+func (d *CourseDownloader) fetchComments(ctx context.Context, aid int, maxPage int) ([]geektime.ArticleComments, error) {
+	prev := 0
+	articleComments, err := d.geektimeClient.V4CommentList(aid, prev)
+	if err != nil {
+		return nil, err
+	}
+
+	retList := []geektime.ArticleComments{}
+	retList = append(retList, articleComments)
+
+	// 在网站抓的报文，看起来很奇怪，没有 prev=1 的报文。所以这里也就这么处理了（跟网站抓的报文保持一致）
+	prev = 2
+	for articleComments.Page.HasMore && prev <= maxPage {
+		articleComments, err = d.geektimeClient.V4CommentList(aid, prev)
+		if err != nil {
+			return nil, err
+		}
+		retList = append(retList, articleComments)
+		prev++
+	}
+
+	return retList, nil
+}
+
 // downloadTextArticle downloads the content of a Geektime text article in various formats (PDF, Markdown, Audio, and Video).
 // The function supports overwriting existing files if specified.
 func (d *CourseDownloader) downloadTextArticle(article geektime.Article, columnDir string, overwrite bool) error {
-	needDownloadPDF := d.cfg.ColumnOutputType&outputPDF != 0
-	needDownloadMD := d.cfg.ColumnOutputType&outputMD != 0
-	needDownloadAudio := d.cfg.ColumnOutputType&outputAudio != 0
+	commentList, err := d.fetchComments(d.ctx,
+		article.AID,
+		d.cfg.MaxCommentsPage,
+	)
+	if err != nil {
+		return err
+	}
 
 	articleInfo, err := d.geektimeClient.V1ArticleInfo(article.AID)
 	if err != nil {
@@ -215,33 +424,19 @@ func (d *CourseDownloader) downloadTextArticle(article geektime.Article, columnD
 		}
 	}
 
-	if needDownloadPDF {
-		if err := pdf.PrintArticlePageToPDF(d.ctx,
-			article,
-			columnDir,
-			d.geektimeClient.Cookies,
-			d.cfg,
-		); err != nil {
-			return err
-		}
+	if err := markdown.Download(d.ctx,
+		time.Unix(int64(articleInfo.Data.ArticleCtime), 0),
+		articleInfo.Data.ArticleContent,
+		article.Title,
+		comments.ConvertToMarkdown(commentList),
+		columnDir,
+		article.AID,
+		articleInfo.Data.AiMindmap,
+		d.cfg.DownloadImages,
+	); err != nil {
+		return err
 	}
 
-	if needDownloadMD {
-		if err := markdown.Download(d.ctx,
-			articleInfo.Data.ArticleContent,
-			article.Title,
-			columnDir,
-			article.AID,
-		); err != nil {
-			return err
-		}
-	}
-
-	if needDownloadAudio {
-		if err := audio.DownloadAudio(d.ctx, articleInfo.Data.AudioDownloadURL, columnDir, article.Title); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

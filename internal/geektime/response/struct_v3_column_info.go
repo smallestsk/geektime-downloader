@@ -23,13 +23,13 @@ type V3ColumnInfoResponse struct {
 		// Bgcolor          string `json:"bgcolor"`
 		// IsIncludePreview bool   `json:"is_include_preview"`
 		// ShowChapter      bool   `json:"show_chapter"`
-		// Utime            int    `json:"utime"`
+		Utime            int    `json:"utime"`
 		// IsDailylesson    bool   `json:"is_dailylesson"`
 		// IsOpencourse     bool   `json:"is_opencourse"`
 		Title            string `json:"title"`
 		// Subtitle         string `json:"subtitle"`
-		// Ctime            int    `json:"ctime"`
-		// Unit             string `json:"unit"`
+		Ctime            int    `json:"ctime"`
+		Unit             string `json:"unit"`
 		// Cover            struct {
 		// 	Square      string `json:"square"`
 		// 	Rectangle   string `json:"rectangle"`
@@ -37,13 +37,13 @@ type V3ColumnInfoResponse struct {
 		// 	Transparent string `json:"transparent"`
 		// 	Color       string `json:"color"`
 		// } `json:"cover"`
-		// Author struct {
-		// 	Name      string `json:"name"`
-		// 	Intro     string `json:"intro"`
-		// 	Avatar    string `json:"avatar"`
-		// 	BriefHTML string `json:"brief_html"`
-		// 	Brief     string `json:"brief"`
-		// } `json:"author"`
+		Author struct {
+			Name      string `json:"name"`
+			Intro     string `json:"intro"`
+			// Avatar    string `json:"avatar"`
+			// BriefHTML string `json:"brief_html"`
+			Brief     string `json:"brief"`
+		} `json:"author"`
 		// Price struct {
 		// 	Market       int `json:"market"`
 		// 	Sale         int `json:"sale"`

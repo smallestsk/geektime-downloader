@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -44,10 +45,29 @@ func (f *customFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return []byte(message), nil
 }
 
+func executableDir() (string, error) {
+    exePath, err := os.Executable()
+    if err != nil {
+        return "", fmt.Errorf("获取可执行文件路径失败: %w", err)
+    }
+
+    realPath, err := filepath.EvalSymlinks(exePath)
+    if err != nil {
+        return "", fmt.Errorf("解析可执行文件真实路径失败: %w", err)
+    }
+
+    return filepath.Dir(realPath), nil
+}
+
 func Init(level string) {
-	userConfigDir, _ := os.UserConfigDir()
-	logDir := filepath.Join(userConfigDir, GeektimeLogFolder)
-	logFilePath := filepath.Join(logDir, GeektimeLogFolder+".log")
+	programDir, err := executableDir()
+	if err != nil {
+		logger.Fatalf("Failed to get executable directory: %v", err)
+	}
+	
+	logDir := filepath.Join(programDir, "logs")
+	date := time.Now().Format("2006-01-02")
+	logFilePath := filepath.Join(logDir, date + ".log")
 
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		logger.Fatalf("Failed to create log directory: %v", err)
