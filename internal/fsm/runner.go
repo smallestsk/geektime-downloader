@@ -66,6 +66,7 @@ func (r *FSMRunner) runQuietMode() error {
 		err := r.download(productType, productID, articleIDs)
 		if err != nil {
 			logger.Errorf(err, "download failed, productType: %d, productID: %s", productType, productID)
+			fmt.Fprintf(os.Stderr, "download failed, productType: %d, productID: %s\n", productType, productID)
 			failedProductIDs = append(failedProductIDs, productID)
 		}
 	}
@@ -111,6 +112,7 @@ func (r *FSMRunner) download(productType int, productID string, articleIDs []str
 				article, exists := articleMap[articleIDInt]
 				if !exists {
 					logger.Errorf(nil, "productID: %d, articleID: %d not found in course.Articles", productIDInt, articleIDInt)
+					fmt.Fprintf(os.Stdout, "productID: %d, articleID: %d not found in course.Articles\n", productIDInt, articleIDInt)
 					continue
 				}
 				err = r.downloadArticle(productTypeOption, course, article)

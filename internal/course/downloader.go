@@ -246,7 +246,7 @@ func (d *CourseDownloader) DownloadAll(course geektime.Course, productType ui.Pr
 	}
 
 	if err := saveCourseInfoFile(course, columnDir); err != nil {
-		fmt.Printf("课程信息下载失败， aid: %d, title: %s\n", course.ID, course.Title)
+		fmt.Fprintf(os.Stderr,"课程信息下载失败， aid: %d, title: %s\n", course.ID, course.Title)
 		return err
 	}
 
@@ -256,12 +256,20 @@ func (d *CourseDownloader) DownloadAll(course geektime.Course, productType ui.Pr
 		var downloaded int
 
 		for _, article := range course.Articles {
-			d.DownloadArticle(course, productType, article, false, true)
+			err := d.DownloadArticle(course, productType, article, false, true)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "文章下载失败， aid: %d, title: %s\n", article.AID, article.Title)
+				return err
+			}
 			increaseDownloadedTextArticleCount(total, &downloaded)
 		}
 	} else {
 		for _, article := range course.Articles {
-			d.DownloadArticle(course, productType, article, false, true)
+			err := d.DownloadArticle(course, productType, article, false, true)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "文章下载失败， aid: %d, title: %s\n", article.AID, article.Title)
+				return err
+			}
 		}
 	}
 
