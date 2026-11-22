@@ -312,8 +312,7 @@ func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType u
 			}
 		}
 		if skip {
-			// fmt.Printf("video skip.\n") // TODO:::::: remove this line
-			// return nil // TODO:::::: comment out this line
+			return nil
 		}
 		if waitRandomTime {
 			d.waitRandomTime()
