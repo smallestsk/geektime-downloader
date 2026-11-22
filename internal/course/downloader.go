@@ -55,9 +55,9 @@ func NewCourseDownloader(ctx context.Context, cfg *config.AppConfig, geektimeCli
 
 func saveProductInfoFile(course geektime.Product, dir string, comments string) error {
 	courseInfoFileName := path.Join(dir, filenamify.Filenamify("00-geektime课程简介") + ".md")
-	if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
-		return nil
-	}
+	// if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
+	// 	return nil
+	// }
 
 	// ---
 	// date created: time.Now()
@@ -144,9 +144,9 @@ func saveProductInfoFile(course geektime.Product, dir string, comments string) e
 
 func saveCourseInfoFile(course geektime.Course, dir string) error {
 	courseInfoFileName := path.Join(dir, filenamify.Filenamify("00-geektime课程简介") + ".md")
-	if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
-		return nil
-	}
+	// if files.CheckFileExists(courseInfoFileName) { // skip if file already exists.
+	// 	return nil
+	// }
 
 	// ---
 	// date created: time.Now()
@@ -207,16 +207,15 @@ func saveCourseInfoFile(course geektime.Course, dir string) error {
 					)
 
 	// # Article list
-	// | article | summary |
+	// | chapter | article |
 	// | -- | -- |
-	// | [[$listItem.Title]] | $listItem.Summary |
+	// | [[$listItem.Title]] |
 	var b strings.Builder
 	for _, article := range course.Articles {
-		b.WriteString(fmt.Sprintf("| [[%s]] | %s |\n",
-						filenamify.Filenamify(article.Title), article.Summary))
+		b.WriteString(fmt.Sprintf("| %s | [[%s]] |\n", filenamify.Filenamify(article.ChapterTitle), filenamify.Filenamify(article.Title)))
 	}
-	articleTable := "# Article list\n" +
-					"| article | summary |\n" +
+	articleTable := "# Article list\n\n" +
+					"| chapter | article |\n" +
 					"| --- | --- |\n" +
 					b.String()
 
@@ -250,8 +249,8 @@ func (d *CourseDownloader) DownloadAll(course geektime.Course, productType ui.Pr
 		return err
 	}
 
+	fmt.Printf("正在下载专栏 %d-《%s》 中的所有文章\n", course.ID, course.Title)
 	if geektime.IsTextCourse(course) {
-		fmt.Printf("正在下载专栏 《%s》 中的所有文章\n", course.Title)
 		total := len(course.Articles)
 		var downloaded int
 
@@ -313,7 +312,8 @@ func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType u
 			}
 		}
 		if skip {
-			return nil
+			// fmt.Printf("video skip.\n") // TODO:::::: remove this line
+			// return nil // TODO:::::: comment out this line
 		}
 		if waitRandomTime {
 			d.waitRandomTime()
@@ -463,7 +463,7 @@ func (d *CourseDownloader) downloadVideoArticle(course geektime.Course, productT
 					articleInfo.AiMindmap,
 					false,
 		); err != nil {
-			fmt.Fprintf(os.Stderr, "文章信息下载失败， articleID: %d, article Title: %s", articleInfo.ID, articleInfo.Title)
+			fmt.Fprintf(os.Stderr, "文章信息下载失败， articleID: %d, article Title: %s\n", articleInfo.ID, articleInfo.Title)
 			logger.Errorf(err, "文章信息下载失败， articleID: %d, article Title: %s", articleInfo.ID, articleInfo.Title)
 		}
 

@@ -18,7 +18,7 @@ func FetchCommentsMD(client *geektime.Client, aid int, maxPage int) (string, err
 	)
 	if err != nil {
 		logger.Errorf(err, "Failed to fetch comments, articleID: %d", aid)
-		fmt.Fprintf(os.Stderr, "Failed to fetch comments, articleID: %d", aid)
+		fmt.Fprintf(os.Stderr, "Failed to fetch comments, articleID: %d\n", aid)
 		return "", err
 	}
 

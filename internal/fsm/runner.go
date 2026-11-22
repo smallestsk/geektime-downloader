@@ -282,7 +282,7 @@ func (r *FSMRunner) validateProductCode(productCode string, productTypeOption ui
 			return true
 		}
 	}
-	fmt.Fprint(os.Stderr, "\r输入的课程 ID 有误\n")
+	fmt.Fprint(os.Stderr, "输入的课程 ID 有误\n")
 	return false
 }
 

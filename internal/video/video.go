@@ -53,7 +53,7 @@ func downloadFiles(ctx context.Context, url string, downloadDir string, filename
 
 	if files.CheckFileExists(filepath) {
 		logger.Infof("文件已存在, filepath: %s", filepath)
-		fmt.Fprintf(os.Stdout, "文件已存在, filepath: %s", filepath)
+		fmt.Fprintf(os.Stdout, "文件已存在, filepath: %s\n", filepath)
 		return
 	}
 
@@ -89,7 +89,7 @@ func DownloadArticleVideo(ctx context.Context,
 	filepath := filepath.Join(projectDir, filenamify.Filenamify(articleInfo.Title)+TSExtension)
 	if files.CheckFileExists(filepath) {
 		logger.Infof("视频文件已存在, articleID: %d， articleTitle: %s", articleInfo.ID, articleInfo.Title)
-		fmt.Fprintf(os.Stdout, "视频文件已存在, articleID: %d， articleTitle: %s", articleInfo.ID, articleInfo.Title)
+		fmt.Fprintf(os.Stdout, "视频文件已存在, articleID: %d， articleTitle: %s\n", articleInfo.ID, articleInfo.Title)
 		return nil
 	}
 

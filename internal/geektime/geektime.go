@@ -17,6 +17,10 @@ const (
 	V1ColumnArticlesPath = "/serv/v1/column/articles"
 	// V1ArticlePath used in normal column
 	V1ArticlePath = "/serv/v1/article"
+
+	// V1ChaptersPath used in normal column
+	V1ChaptersPath = "/serv/v1/chapters"
+
 	// V4CommentsPath used in normal column
 	V4CommentsPath = "/serv/v4/comment/list"
 	// V3ColumnInfoPath used in get normal column/video info
@@ -48,6 +52,7 @@ type Course struct {
 	TimeCreated time.Time
 	TimeUpdated time.Time
 	Unit string // 集数
+	CID int // chapter_id
 	Author struct {
 		Name string
 		Intro string
@@ -83,6 +88,8 @@ type Article struct {
 	SectionTitle string
 	Title        string
 	Summary string
+	ChapterID string
+	ChapterTitle string
 }
 
 type V3ArticleInfo struct {
@@ -106,6 +113,11 @@ type V3ArticleInfo struct {
 			Url    string
 			Filename    string
 	}
+}
+
+type Chapter struct {
+	Title            string
+	ID               string
 }
 
 type ArticleComments struct {
@@ -140,7 +152,26 @@ func (c *Client) CourseInfo(productID int) (Course, error) {
 		return p, err
 	}
 
+	var chapters []Chapter
+	chapters, err = c.chaptersInfo(p.CID)
+	if err != nil {
+		return p, err
+	}
+	chapterMap := make(map[string]Chapter, len(chapters))
+	for _, chapter := range chapters {
+		chapterMap[chapter.ID] = chapter
+	}
+	for i := range articles {
+		chapter, ok := chapterMap[articles[i].ChapterID]
+		if ok {
+			articles[i].ChapterTitle = chapter.Title
+		}
+	}
+
 	sort.Slice(articles, func(i, j int) bool {
+		if articles[i].ChapterID != articles[j].ChapterID {
+			return articles[i].ChapterID < articles[j].ChapterID
+		}
 		return articles[i].AID < articles[j].AID
 	})
 
@@ -289,11 +320,40 @@ func (c *Client) columnInfo(productID int) (Course, error) {
 		Type:    res.Data.Type,
 		Title:   res.Data.Title,
 		IsVideo: res.Data.IsVideo,
+		CID: res.Data.Extra.Cid,
 		TimeCreated: time.Unix(int64(res.Data.Ctime), 0),
 		TimeUpdated: time.Unix(int64(res.Data.Utime), 0),
 		Unit: res.Data.Unit,
 		Author: struct{Name string; Intro string; Brief string}(res.Data.Author),
 	}, nil
+}
+
+
+// columnArticles call geektime api to get article list
+func (c *Client) chaptersInfo(cid int) ([]Chapter, error) {
+	res := &response.V1ChaptersResponse{}
+	r := c.newRequest(
+		resty.MethodPost,
+		DefaultBaseURL,
+		V1ChaptersPath,
+		nil,
+		map[string]interface{}{
+			"cid":    cid,
+		},
+		res,
+	)
+	if _, err := do(r); err != nil {
+		return nil, err
+	}
+
+	var chapters []Chapter
+	for _, v := range res.Data {
+		chapters = append(chapters, Chapter{
+			ID:   v.ID,
+			Title: v.Title,
+		})
+	}
+	return chapters, nil
 }
 
 // columnArticles call geektime api to get article list
@@ -322,6 +382,7 @@ func (c *Client) columnArticles(cid int) ([]Article, error) {
 		articles = append(articles, Article{
 			AID:   v.ID,
 			Title: v.ArticleTitle,
+			ChapterID: v.ChapterID,
 			Summary: v.ArticleSummary,
 		})
 	}

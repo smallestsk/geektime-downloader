@@ -195,7 +195,7 @@ type V3ColumnInfoResponse struct {
 			// 	Type    string `json:"type"`
 			// 	IsTop   bool   `json:"is_top"`
 			// } `json:"modules"`
-			// Cid        int `json:"cid"`
+			Cid        int `json:"cid"`
 			// FirstPromo struct {
 			// 	Price     int  `json:"price"`
 			// 	CouldJoin bool `json:"could_join"`

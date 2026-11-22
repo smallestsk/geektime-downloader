@@ -11,7 +11,7 @@ type V1ColumnArticlesResponse struct {
 			// ArticleCover      string        `json:"article_cover"`
 			// Subtitles         []interface{} `json:"subtitles"`
 			// AudioURL          string        `json:"audio_url,omitempty"`
-			// ChapterID         string        `json:"chapter_id"`
+			ChapterID         string        `json:"chapter_id"`
 			// ColumnHadSub      bool          `json:"column_had_sub"`
 			// ReadingTime       int           `json:"reading_time"`
 			// IsFinished        bool          `json:"is_finished"`

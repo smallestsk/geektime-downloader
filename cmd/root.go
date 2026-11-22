@@ -73,7 +73,8 @@ func Execute() {
 	go func() {
 		select {
 		case <-c:
-			cancel()
+			os.Exit(130)
+			// cancel()
 		case <-ctx.Done():
 		}
 	}()
