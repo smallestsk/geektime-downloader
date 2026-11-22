@@ -293,9 +293,9 @@ func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType u
 			d.waitRandomTime()
 		}
 
-		d.downloadingSpinner.Prefix = fmt.Sprintf("[ 正在下载 《%s》, articleID: %d... ]", article.Title, article.AID)
-		d.downloadingSpinner.Start()
-		defer d.downloadingSpinner.Stop()
+		// d.downloadingSpinner.Prefix = fmt.Sprintf("[ 正在下载 《%s》, articleID: %d... ]", article.Title, article.AID)
+		// d.downloadingSpinner.Start()
+		// defer d.downloadingSpinner.Stop()
 		return d.downloadTextArticle(article, columnDir, overwrite)
 	} else {
 		skip := skipDownloadVideoArticle(article, columnDir, overwrite)
