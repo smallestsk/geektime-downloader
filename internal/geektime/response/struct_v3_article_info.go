@@ -5,6 +5,7 @@ type V3ArticleInfoResponse struct {
 	Code int `json:"code"`
 	Data struct {
 		Info struct {
+			AiMindmap     string `json:"ai_mindmap"`
 			ID           int    `json:"id"`
 			Type         int    `json:"type"`
 			// Pid          int    `json:"pid"`
@@ -14,7 +15,7 @@ type V3ArticleInfoResponse struct {
 			// Subtitle     string `json:"subtitle"`
 			// ShareTitle   string `json:"share_title"`
 			// Summary      string `json:"summary"`
-			// Ctime        int    `json:"ctime"`
+			Ctime        int    `json:"ctime"`
 			// Cover        struct {
 			// 	Default string `json:"default"`
 			// } `json:"cover"`
@@ -114,7 +115,7 @@ type V3ArticleInfoResponse struct {
 			// } `json:"like"`
 			// ReadingTime int           `json:"reading_time"`
 			// IPAddress   string        `json:"ip_address"`
-			// Content     string        `json:"content"`
+			Content     string        `json:"content"`
 			// ContentMd   string        `json:"content_md"`
 			Attachments []struct{
 					Url    string `json:"url"`

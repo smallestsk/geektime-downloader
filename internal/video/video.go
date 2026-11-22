@@ -50,6 +50,13 @@ type GetPlayInfoResponse struct {
 
 func downloadFiles(ctx context.Context, url string, downloadDir string, filename string) {
 	filepath := filepath.Join(downloadDir, filenamify.Filenamify(filename))
+
+	if files.CheckFileExists(filepath) {
+		logger.Infof("文件已存在, filepath: %s", filepath)
+		fmt.Fprintf(os.Stdout, "文件已存在, filepath: %s", filepath)
+		return
+	}
+
 	downloader.DownloadFile(ctx, url, filepath);
 }
 
@@ -57,48 +64,52 @@ func downloadFiles(ctx context.Context, url string, downloadDir string, filename
 // sourceType: normal video cource 1
 func DownloadArticleVideo(ctx context.Context,
 	client *geektime.Client,
-	articleID int,
+	articleInfo geektime.V3ArticleInfo,
 	sourceType int,
 	projectDir string,
 	quality string,
 	concurrency int,
 ) error {
-	logger.Infof("Begin download normal article video, articleID: %d, sourceType: %d", articleID, sourceType)
-	articleInfo, err := client.V3ArticleInfo(articleID)
-	if err != nil {
-		return err
-	}
-	if articleInfo.Data.Info.Video.ID == "" {
+	logger.Infof("Begin download normal article video, articleID: %d, sourceType: %d", articleInfo.ID, sourceType)
+
+	if articleInfo.Video.ID == "" {
 		return nil
 	}
 
 	// 下载字幕文件
-	if articleInfo.Data.Info.Video.Subtitles != nil && len(articleInfo.Data.Info.Video.Subtitles) > 0 {
-		for _, subtitle := range articleInfo.Data.Info.Video.Subtitles {
-			subtitleFileName := filenamify.Filenamify(articleInfo.Data.Info.Title)+ "." + subtitle.Format
+	if articleInfo.Video.Subtitles != nil && len(articleInfo.Video.Subtitles) > 0 {
+		for _, subtitle := range articleInfo.Video.Subtitles {
+			subtitleFileName := filenamify.Filenamify(articleInfo.Title)+ "." + subtitle.Format
 			downloadFiles(ctx, subtitle.Url, projectDir, subtitleFileName)
 		}
 	} else {
-		logger.Warnf("视频文件无字幕, articleID: %d， articleTitle: %s", articleID, articleInfo.Data.Info.Title)
+		logger.Warnf("视频文件无字幕, articleID: %d， articleTitle: %s", articleInfo.ID, articleInfo.Title)
 	}
 
-	playAuth, err := client.VideoPlayAuth(articleInfo.Data.Info.ID, sourceType, articleInfo.Data.Info.Video.ID)
+	filepath := filepath.Join(projectDir, filenamify.Filenamify(articleInfo.Title)+TSExtension)
+	if files.CheckFileExists(filepath) {
+		logger.Infof("视频文件已存在, articleID: %d， articleTitle: %s", articleInfo.ID, articleInfo.Title)
+		fmt.Fprintf(os.Stdout, "视频文件已存在, articleID: %d， articleTitle: %s", articleInfo.ID, articleInfo.Title)
+		return nil
+	}
+
+	playAuth, err := client.VideoPlayAuth(articleInfo.ID, sourceType, articleInfo.Video.ID)
 	if err != nil {
 		return err
 	}
 	err = downloadAliyunVodEncryptVideo(ctx,
 		client,
 		playAuth,
-		articleInfo.Data.Info.Title,
+		articleInfo.Title,
 		projectDir,
 		quality,
-		articleInfo.Data.Info.Video.ID,
+		articleInfo.Video.ID,
 		concurrency)
 	if err != nil {
-		logger.Errorf(err, "Download normal article video failed, articleID: %d", articleID)
+		logger.Errorf(err, "Download normal article video failed, articleID: %d", articleInfo.ID)
 		return err
 	} else {
-		logger.Infof("Finish download normal article video, articleID: %d", articleID)
+		logger.Infof("Finish download normal article video, articleID: %d", articleInfo.ID)
 		return nil
 	}
 }

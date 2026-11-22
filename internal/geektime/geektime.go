@@ -85,6 +85,29 @@ type Article struct {
 	Summary string
 }
 
+type V3ArticleInfo struct {
+	AiMindmap     string
+	ID           int
+	Type         int
+	Title        string
+	Ctime        int
+	Video struct {
+		ID       string
+		Subtitles []struct {
+			Url    string
+			Format    string
+			Name    string
+		}
+	}
+	IsVideo         bool
+	InPvip          int
+	Content     string
+	Attachments []struct{
+			Url    string
+			Filename    string
+	}
+}
+
 type ArticleComments struct {
 	Page struct {
 		HasMore bool
@@ -202,7 +225,7 @@ func (c *Client) ProductInfo(productID int) (Product, error) {
 }
 
 // V3ArticleInfo used to get daily lesson or qconplus article info
-func (c *Client) V3ArticleInfo(articleID int) (response.V3ArticleInfoResponse, error) {
+func (c *Client) V3ArticleInfo(articleID int) (V3ArticleInfo, error) {
 	var res response.V3ArticleInfoResponse
 	r := c.newRequest(
 		resty.MethodPost,
@@ -215,9 +238,10 @@ func (c *Client) V3ArticleInfo(articleID int) (response.V3ArticleInfoResponse, e
 		&res,
 	)
 	if _, err := do(r); err != nil {
-		return response.V3ArticleInfoResponse{}, err
+		return V3ArticleInfo{}, err
 	}
-	return res, nil
+
+	return V3ArticleInfo(res.Data.Info), nil
 }
 
 // VideoPlayAuth get play auth string

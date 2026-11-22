@@ -286,7 +286,7 @@ func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType u
 	}
 
 	if geektime.IsTextCourse(course) {
-		skip := d.skipDownloadTextArticle(article, columnDir, overwrite)
+		skip := skipDownloadTextArticle(article, columnDir, overwrite)
 		if skip {
 			return nil
 		}
@@ -299,7 +299,7 @@ func (d *CourseDownloader) DownloadArticle(course geektime.Course, productType u
 		defer d.downloadingSpinner.Stop()
 		return d.downloadTextArticle(article, columnDir, overwrite)
 	} else {
-		skip := d.skipDownloadVideoArticle(article, columnDir, overwrite)
+		skip := skipDownloadVideoArticle(article, columnDir, overwrite)
 
 		// 训练营特殊处理，训练营只能从文章详情中获取当前文章是否是视频，训练营目前只支持下载视频类文章，
 		// 下载所有时如果是文本类，直接跳过
@@ -333,20 +333,19 @@ func (d *CourseDownloader) DownloadSingleVideoProduct(productInfo geektime.Produ
 		return err
 	}
 
-	commentList, err := d.fetchComments(d.ctx,
-		productInfo.Article.ID,
-		d.cfg.MaxCommentsPage,
-	)
+	commentsMDString, _ := comments.FetchCommentsMD(d.geektimeClient, productInfo.Article.ID, d.cfg.MaxCommentsPage)
+
+	if err := saveProductInfoFile(productInfo, columnDir, commentsMDString); err != nil {
+		fmt.Printf("课程信息下载失败， productID: %d, title: %s\n", productInfo.ID, productInfo.Title)
+		return err
+	}
+
+	articleInfo, err := d.geektimeClient.V3ArticleInfo(productInfo.Article.ID)
 	if err != nil {
 		return err
 	}
 
-	if err := saveProductInfoFile(productInfo, columnDir, comments.ConvertToMarkdown(commentList)); err != nil {
-		fmt.Printf("课程信息下载失败， aid: %d, title: %s\n", productInfo.ID, productInfo.Title)
-		return err
-	}
-
-	return video.DownloadArticleVideo(d.ctx, d.geektimeClient, productInfo.Article.ID, sourceType, columnDir, d.cfg.Quality, d.concurrency)
+	return video.DownloadArticleVideo(d.ctx, d.geektimeClient, articleInfo, sourceType, columnDir, d.cfg.Quality, d.concurrency)
 }
 
 func increaseDownloadedTextArticleCount(total int, downloaded *int) {
@@ -358,54 +357,26 @@ func increaseDownloadedTextArticleCount(total int, downloaded *int) {
 	fmt.Printf("\r已完成下载%d/%d", current, total)
 }
 
-func (d *CourseDownloader) skipDownloadTextArticle(article geektime.Article, columnDir string, overwrite bool) bool {
+func shouldSkipFile(filepath string, overwrite bool) bool {
 	if overwrite {
 		return false
 	}
 
-	markdownFileName := filepath.Join(columnDir, filenamify.Filenamify(article.Title)+markdown.MDExtension)
-	if !files.CheckFileExists(markdownFileName) {
+	if !files.CheckFileExists(filepath) {
 		return false
 	}
 
 	return true
 }
 
-func (d *CourseDownloader) fetchComments(ctx context.Context, aid int, maxPage int) ([]geektime.ArticleComments, error) {
-	prev := 0
-	articleComments, err := d.geektimeClient.V4CommentList(aid, prev)
-	if err != nil {
-		return nil, err
-	}
-
-	retList := []geektime.ArticleComments{}
-	retList = append(retList, articleComments)
-
-	// 在网站抓的报文，看起来很奇怪，没有 prev=1 的报文。所以这里也就这么处理了（跟网站抓的报文保持一致）
-	prev = 2
-	for articleComments.Page.HasMore && prev <= maxPage {
-		articleComments, err = d.geektimeClient.V4CommentList(aid, prev)
-		if err != nil {
-			return nil, err
-		}
-		retList = append(retList, articleComments)
-		prev++
-	}
-
-	return retList, nil
+func skipDownloadTextArticle(article geektime.Article, columnDir string, overwrite bool) bool {
+	markdownFilePath := filepath.Join(columnDir, filenamify.Filenamify(article.Title) + markdown.MDExtension)
+	return shouldSkipFile(markdownFilePath, overwrite)
 }
 
 // downloadTextArticle downloads the content of a Geektime text article in various formats (PDF, Markdown, Audio, and Video).
 // The function supports overwriting existing files if specified.
 func (d *CourseDownloader) downloadTextArticle(article geektime.Article, columnDir string, overwrite bool) error {
-	commentList, err := d.fetchComments(d.ctx,
-		article.AID,
-		d.cfg.MaxCommentsPage,
-	)
-	if err != nil {
-		return err
-	}
-
 	articleInfo, err := d.geektimeClient.V1ArticleInfo(article.AID)
 	if err != nil {
 		return err
@@ -432,11 +403,13 @@ func (d *CourseDownloader) downloadTextArticle(article geektime.Article, columnD
 		}
 	}
 
+	commentsMDString, _ := comments.FetchCommentsMD(d.geektimeClient, article.AID, d.cfg.MaxCommentsPage)
+
 	if err := markdown.Download(d.ctx,
 		time.Unix(int64(articleInfo.Data.ArticleCtime), 0),
 		articleInfo.Data.ArticleContent,
 		article.Title,
-		comments.ConvertToMarkdown(commentList),
+		commentsMDString,
 		columnDir,
 		article.AID,
 		articleInfo.Data.AiMindmap,
@@ -448,14 +421,9 @@ func (d *CourseDownloader) downloadTextArticle(article geektime.Article, columnD
 	return nil
 }
 
-func (d *CourseDownloader) skipDownloadVideoArticle(article geektime.Article, columnDir string, overwrite bool) bool {
-	dir := columnDir
-	fileName := filenamify.Filenamify(article.Title) + video.TSExtension
-	fullPath := filepath.Join(dir, fileName)
-	if files.CheckFileExists(fullPath) && !overwrite {
-		return true
-	}
-	return false
+func skipDownloadVideoArticle(article geektime.Article, columnDir string, overwrite bool) bool {
+	videoFilePath := filepath.Join(columnDir, filenamify.Filenamify(article.Title) + video.TSExtension)
+	return shouldSkipFile(videoFilePath, overwrite)
 }
 
 // downloadVideoArticle downloads a video article to the specified column directory.
@@ -476,7 +444,30 @@ func (d *CourseDownloader) downloadVideoArticle(course geektime.Course, productT
 	} else if d.cfg.IsEnterprise {
 		err = video.DownloadEnterpriseArticleVideo(d.ctx, d.geektimeClient, article.AID, dir, d.cfg.Quality, d.concurrency)
 	} else {
-		err = video.DownloadArticleVideo(d.ctx, d.geektimeClient, article.AID, productType.SourceType, dir, d.cfg.Quality, d.concurrency)
+		
+		articleInfo, err := d.geektimeClient.V3ArticleInfo(article.AID)
+		if err != nil {
+			return err
+		}
+
+		// 下载文章信息，包含文章内容，评论
+		commentsMDString, _ := comments.FetchCommentsMD(d.geektimeClient, article.AID, d.cfg.MaxCommentsPage)
+
+		if err := markdown.Download(d.ctx,
+					time.Unix(int64(articleInfo.Ctime), 0),
+					articleInfo.Content,
+					articleInfo.Title,
+					commentsMDString,
+					dir,
+					articleInfo.ID,
+					articleInfo.AiMindmap,
+					false,
+		); err != nil {
+			fmt.Fprintf(os.Stderr, "文章信息下载失败， articleID: %d, article Title: %s", articleInfo.ID, articleInfo.Title)
+			logger.Errorf(err, "文章信息下载失败， articleID: %d, article Title: %s", articleInfo.ID, articleInfo.Title)
+		}
+
+		err = video.DownloadArticleVideo(d.ctx, d.geektimeClient, articleInfo, productType.SourceType, dir, d.cfg.Quality, d.concurrency)
 	}
 	return err
 }

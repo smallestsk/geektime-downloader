@@ -72,7 +72,7 @@ func (r *FSMRunner) runQuietMode() error {
 	}
 
 	if len(failedProductIDs) > 0 {
-		fmt.Fprint(os.Stderr, "下载失败的 productID: %s\n", strings.Join(failedProductIDs, ","))
+		fmt.Fprintf(os.Stderr, "下载失败的 productID: %s\n", strings.Join(failedProductIDs, ","))
 	}
 	return nil
 }
@@ -85,7 +85,7 @@ func (r *FSMRunner) download(productType int, productID string, articleIDs []str
 	}
 
 	if !productTypeOption.NeedSelectArticle {
-		return  r.handleInputProductIDIfDownloadDirectly(productIDInt)
+		return  r.handleInputProductIDIfDownloadDirectly(productIDInt, productTypeOption)
 	} else {
 		// queryCourseInfo by productID
 		//     articleIDs 为空，则 r.courseDownloader.DownloadAll(courseInfo, productTypeOption)
@@ -145,7 +145,7 @@ func (r *FSMRunner) runInteractiveMode() error {
 				if r.selectedProductType.NeedSelectArticle {
 					err = r.handleInputProductIDIfNeedSelectArticle(productID)
 				} else {
-					err = r.handleInputProductIDIfDownloadDirectly(productID)
+					err = r.handleInputProductIDIfDownloadDirectly(productID, r.selectedProductType)
 				}
 			}
 		case StateProductAction:
@@ -237,48 +237,6 @@ func (r *FSMRunner) queryCourseInfo(productID int, productTypeOption ui.ProductT
 
 // queryCourseInfo
 func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error {
-	// // choose download all or download specified article
-	// r.sp.Prefix = "[ 正在加载课程信息... ]"
-	// r.sp.Start()
-	// defer r.sp.Stop()
-
-	// var course geektime.Course
-	// var err error
-	// if r.selectedProductType.IsEnterpriseMode {
-	// 	// TODO: check enterprise course type
-	// 	course, err = r.geektimeClient.EnterpriseCourseInfo(productID)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// } else {
-	// 	if r.selectedProductType.IsUniversity() {
-	// 		// university don't need check product type
-	// 		// if input invalid id, access mark is 0
-	// 		course, err = r.geektimeClient.UniversityClassInfo(productID)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	} else {
-	// 		course, err = r.geektimeClient.CourseInfo(productID)
-	// 		if err == nil {
-	// 			valid := r.validateProductCode(course.Type)
-	// 			// if check product type fail, re-input product
-	// 			if !valid {
-	// 				r.currentState = StateInputProductID
-	// 				return nil
-	// 			}
-	// 		} else {
-	// 			return err
-	// 		}
-	// 	}
-	// }
-	// if !course.Access {
-	// 	fmt.Fprint(os.Stderr, "尚未购买该课程\n")
-	// 	r.currentState = StateInputProductID
-	// 	return nil
-	// }
-
 	course, err := r.queryCourseInfo(productID, r.selectedProductType)
 	if err != nil {
 		logger.Errorf(err, "handleInputProductIDIfNeedSelectArticle error, productID: %d", productID)
@@ -290,7 +248,7 @@ func (r *FSMRunner) handleInputProductIDIfNeedSelectArticle(productID int) error
 	return nil
 }
 
-func (r *FSMRunner) handleInputProductIDIfDownloadDirectly(productID int) error {
+func (r *FSMRunner) handleInputProductIDIfDownloadDirectly(productID int, productTypeOption ui.ProductTypeSelectOption) error {
 	// when product type is daily lesson or qconplus,
 	// input id means product id
 	// download video directly
@@ -305,9 +263,9 @@ func (r *FSMRunner) handleInputProductIDIfDownloadDirectly(productID int) error 
 		return nil
 	}
 
-	if r.validateProductCode(productInfo.Type, r.selectedProductType) {
+	if r.validateProductCode(productInfo.Type, productTypeOption) {
 		err = r.courseDownloader.DownloadSingleVideoProduct(productInfo,
-			r.selectedProductType.SourceType)
+			productTypeOption.SourceType)
 		if err != nil {
 			return err
 		}
